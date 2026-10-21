@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>それ、ギャンブル？ トレード判定ツール</title>
+<meta name="description" content="勝率・平均利益・平均損失・試行回数を入れるだけで、そのトレードがギャンブルかどうかを判定。100人が試したら何人が破産するかをシミュレーションします。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="それ、ギャンブル？ トレード判定ツール">
+<meta property="og:description" content="勝率とリスクリワードと試行回数から、100人中何人が破産するかを計算。登録不要・無料で使えます。">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="それ、ギャンブル？ トレード判定ツール">
+<meta name="twitter:description" content="勝率とリスクリワードと試行回数から、100人中何人が破産するかを計算。登録不要・無料で使えます。">
+<style>
+:root{
+  --bg:#EEF1EC; --surface:#FBFCFA; --ink:#1C2826; --muted:#56655F; --line:#D3DAD2;
+  --good:#1B7462; --warn:#94690A; --bad:#AE3443; --lossc:#AEB8B3; --track:#DCE3DA;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111816; --surface:#19221F; --ink:#E4EBE7; --muted:#9DADA7; --line:#2C3835;
+    --good:#4DBE9F; --warn:#E0B44A; --bad:#EE7383; --lossc:#4B5854; --track:#25302D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#19221F; --ink:#E4EBE7; --muted:#9DADA7; --line:#2C3835;
+  --good:#4DBE9F; --warn:#E0B44A; --bad:#EE7383; --lossc:#4B5854; --track:#25302D;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;
+  font-size:17px; line-height:1.75; font-feature-settings:"palt" 1;
+}
+.wrap{max-width:680px; margin:0 auto; padding:24px 20px 120px}
+button{font:inherit; color:inherit}
+:focus-visible{outline:3px solid var(--ink); outline-offset:2px}
+.kicker{font-size:.92rem; color:var(--muted); margin:0 0 4px}
+h2{font-size:1.2rem; margin:0 0 6px; font-weight:700; line-height:1.4}
+.lead{margin:0 0 14px; color:var(--muted); font-size:.92rem}
+section{margin-bottom:40px}
+
+/* hero */
+#hero h1{
+  font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP","Noto Serif CJK JP",serif;
+  font-weight:800; font-size:clamp(1.9rem,7.5vw,3rem); line-height:1.25;
+  margin:4px 0 12px; color:var(--v,var(--ink)); transition:color .25s;
+}
+#hero > p{margin:0 0 20px}
+.dots{display:grid; grid-template-columns:repeat(20,1fr); gap:4px; max-width:460px; margin:0 0 12px}
+.dots i{aspect-ratio:1; border-radius:50%; background:var(--track); transition:background .3s}
+.dots i.g{background:var(--good)} .dots i.l{background:var(--lossc)} .dots i.b{background:var(--bad)}
+.dotlegend{display:flex; flex-wrap:wrap; gap:4px 18px; margin:0; padding:0; list-style:none; font-size:.95rem}
+.dotlegend li{display:flex; align-items:center; gap:7px}
+.dotlegend b{font-size:1.15rem; font-variant-numeric:tabular-nums}
+.sw{width:12px; height:12px; border-radius:50%; flex-shrink:0}
+.dotcap{font-size:.85rem; color:var(--muted); margin:8px 0 0}
+
+/* presets */
+.presets{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; margin:0 -2px 6px; scrollbar-width:thin}
+.presets button{
+  flex-shrink:0; min-height:44px; padding:8px 16px; border-radius:999px; cursor:pointer;
+  background:var(--surface); border:1px solid var(--line); white-space:nowrap; text-align:left; line-height:1.35;
+}
+.presets button small{display:block; font-size:.75rem; color:var(--muted)}
+.presets button[aria-pressed="true"]{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+.presets button[aria-pressed="true"] small{color:var(--bg); opacity:.8}
+
+/* fields */
+.field{padding:16px 0; border-bottom:1px solid var(--line)}
+.field:first-of-type{border-top:1px solid var(--line)}
+.field label{display:block; font-weight:700; font-size:1.02rem}
+.hint{margin:0 0 8px; font-size:.86rem; color:var(--muted); line-height:1.55}
+.stepper{display:flex; align-items:stretch; max-width:340px; border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden}
+.stepper button{width:54px; min-height:52px; flex-shrink:0; font-size:1.5rem; line-height:1; background:transparent; border:0; cursor:pointer}
+.stepper button:active{background:var(--track)}
+.stepper .box{flex:1; display:flex; align-items:center; border-left:1px solid var(--line); border-right:1px solid var(--line); min-width:0; padding-right:10px}
+.stepper input{flex:1; min-width:0; width:100%; border:0; background:transparent; color:var(--ink); font:inherit; font-size:1.3rem; font-weight:700; text-align:right; padding:0 6px; font-variant-numeric:tabular-nums}
+.stepper input:focus-visible{outline:none}
+.stepper:focus-within{outline:3px solid var(--ink); outline-offset:2px}
+.stepper .unit{color:var(--muted); font-size:.95rem}
+input[type=range]{width:100%; max-width:340px; display:block; margin:10px 0 0; height:30px; accent-color:var(--ink)}
+.derived{margin:8px 0 0; font-size:.9rem}
+.derived.alert{color:var(--bad)}
+
+/* results */
+.rows{margin:0; padding:0; list-style:none; border-top:1px solid var(--line)}
+.rows li{display:flex; justify-content:space-between; align-items:baseline; gap:16px; padding:12px 0; border-bottom:1px solid var(--line)}
+.rows .k{font-size:.95rem}
+.rows .k small{display:block; color:var(--muted); font-size:.8rem}
+.rows .v{font-weight:700; font-size:1.25rem; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+
+/* advice */
+.advice{margin:0; padding:0; list-style:none}
+.advice li{padding:12px 14px; margin-bottom:8px; background:var(--surface); border-left:4px solid var(--v,var(--ink)); border-radius:4px 10px 10px 4px}
+
+/* chart */
+.canvas-box{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; overflow:hidden}
+canvas{display:block; width:100%}
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; font-size:.82rem; color:var(--muted); margin-top:8px}
+.legend i{display:inline-block; width:16px; height:3px; vertical-align:middle; margin-right:5px; border-radius:2px}
+
+/* details */
+details{border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+summary{cursor:pointer; min-height:52px; display:flex; align-items:center; font-weight:700; list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"＋"; margin-left:auto; color:var(--muted); font-weight:400}
+details[open] summary::after{content:"－"}
+.det{padding-bottom:18px}
+.det dl{margin:0 0 20px; display:grid; grid-template-columns:1fr auto; gap:10px 16px}
+.det dt{font-size:.92rem}
+.det dt small{display:block; color:var(--muted); font-size:.78rem}
+.det dd{margin:0; font-weight:700; text-align:right; font-variant-numeric:tabular-nums}
+
+.notes{font-size:.85rem; color:var(--muted)}
+.notes p{margin:0 0 8px}
+.reset{min-height:44px; padding:8px 18px; border-radius:10px; border:1px solid var(--line); background:transparent; cursor:pointer; margin-top:6px}
+
+/* sticky bar */
+.bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:20;
+  padding:10px 20px calc(10px + env(safe-area-inset-bottom,0px));
+  background:var(--surface); border-top:1px solid var(--line);
+  transform:translateY(110%); transition:transform .25s;
+}
+.bar.show{transform:none}
+.bar a{max-width:680px; margin:0 auto; display:flex; align-items:center; gap:12px; color:var(--ink); text-decoration:none; min-height:40px}
+.bar .t{font-weight:700; color:var(--v,var(--ink)); flex:1; line-height:1.35}
+.bar .s{font-size:.85rem; color:var(--muted); white-space:nowrap}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section id="hero" aria-live="polite">
+    <p class="kicker">それ、ギャンブル？</p>
+    <h1 id="vTitle">計算中…</h1>
+    <p id="vText"></p>
+    <div class="dots" id="dots" role="img" aria-label=""></div>
+    <ul class="dotlegend">
+      <li><span class="sw" style="background:var(--good)"></span>利益で終わる <b id="cG">–</b>人</li>
+      <li><span class="sw" style="background:var(--lossc)"></span>損で終わる <b id="cL">–</b>人</li>
+      <li><span class="sw" style="background:var(--bad)"></span>途中で破産 <b id="cB">–</b>人</li>
+    </ul>
+    <p class="dotcap">同じやり方を100人が試したらどうなるか、の目安です。投資助言ではありません。</p>
+  </section>
+
+  <section aria-labelledby="inH">
+    <h2 id="inH">あなたのやり方を入力</h2>
+    <p class="lead">例から選ぶか、自分の数字に書きかえてください。結果はすぐ上に反映されます。</p>
+    <div class="presets" id="presets" role="group" aria-label="例"></div>
+
+    <div class="field">
+      <label for="cap">元手</label>
+      <p class="hint">トレードに使うお金の合計</p>
+      <div class="stepper"><button type="button" data-k="cap" data-d="-1" aria-label="元手を減らす">−</button><div class="box"><input id="cap" inputmode="numeric" autocomplete="off"><span class="unit">円</span></div><button type="button" data-k="cap" data-d="1" aria-label="元手を増やす">＋</button></div>
+    </div>
+
+    <div class="field">
+      <label for="p">勝率</label>
+      <p class="hint">10回やって何回勝つか</p>
+      <div class="stepper"><button type="button" data-k="p" data-d="-1" aria-label="勝率を下げる">−</button><div class="box"><input id="p" inputmode="numeric" autocomplete="off"><span class="unit">%</span></div><button type="button" data-k="p" data-d="1" aria-label="勝率を上げる">＋</button></div>
+      <input type="range" id="pR" min="1" max="99" step="1" aria-label="勝率スライダー">
+      <p class="derived" id="pD"></p>
+    </div>
+
+    <div class="field">
+      <label for="win">勝ったときの平均利益</label>
+      <p class="hint">1回勝つと、平均いくら増えるか</p>
+      <div class="stepper"><button type="button" data-k="win" data-d="-1" aria-label="平均利益を減らす">−</button><div class="box"><input id="win" inputmode="numeric" autocomplete="off"><span class="unit">円</span></div><button type="button" data-k="win" data-d="1" aria-label="平均利益を増やす">＋</button></div>
+      <p class="derived" id="winD"></p>
+    </div>
+
+    <div class="field">
+      <label for="loss">負けたときの平均損失</label>
+      <p class="hint">1回負けると、平均いくら減るか（損切り額）</p>
+      <div class="stepper"><button type="button" data-k="loss" data-d="-1" aria-label="平均損失を減らす">−</button><div class="box"><input id="loss" inputmode="numeric" autocomplete="off"><span class="unit">円</span></div><button type="button" data-k="loss" data-d="1" aria-label="平均損失を増やす">＋</button></div>
+      <p class="derived" id="lossD"></p>
+    </div>
+
+    <div class="field">
+      <label for="n">試行回数</label>
+      <p class="hint">これから何回トレードするか</p>
+      <div class="stepper"><button type="button" data-k="n" data-d="-1" aria-label="回数を減らす">−</button><div class="box"><input id="n" inputmode="numeric" autocomplete="off"><span class="unit">回</span></div><button type="button" data-k="n" data-d="1" aria-label="回数を増やす">＋</button></div>
+      <input type="range" id="nR" min="10" max="2000" step="10" aria-label="回数スライダー">
+    </div>
+
+    <div class="field">
+      <label for="dd">破産ライン</label>
+      <p class="hint">元手が何%減ったら「破産」とみなすか</p>
+      <div class="stepper"><button type="button" data-k="dd" data-d="-1" aria-label="破産ラインを下げる">−</button><div class="box"><input id="dd" inputmode="numeric" autocomplete="off"><span class="unit">%減</span></div><button type="button" data-k="dd" data-d="1" aria-label="破産ラインを上げる">＋</button></div>
+      <input type="range" id="ddR" min="10" max="90" step="5" aria-label="破産ラインスライダー">
+      <p class="derived" id="ddD"></p>
+    </div>
+    <button type="button" class="reset" id="reset">最初の数字に戻す</button>
+  </section>
+
+  <section aria-labelledby="resH">
+    <h2 id="resH">結果</h2>
+    <ul class="rows">
+      <li><span class="k">1回あたりの平均損益<small>勝ち負けをならした1回分</small></span><span class="v" id="rEv">–</span></li>
+      <li><span class="k">真ん中の人の最終資金<small>100人中、50番目の人</small></span><span class="v" id="rMid">–</span></li>
+      <li><span class="k">運が良かった人<small>上位5%</small></span><span class="v" id="rHi">–</span></li>
+      <li><span class="k">運が悪かった人<small>下位5%</small></span><span class="v" id="rLo">–</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="adH">
+    <h2 id="adH">ギャンブルにしないためのヒント</h2>
+    <ul class="advice" id="advice"></ul>
+  </section>
+
+  <section aria-labelledby="chH">
+    <h2 id="chH">資金の動き</h2>
+    <p class="lead">細い線は一人ひとりの結果、太い線は真ん中の人です。</p>
+    <div class="canvas-box"><canvas id="chart" height="280" role="img" aria-label=""></canvas></div>
+    <div class="legend">
+      <span><i style="background:var(--ink);height:4px"></i>真ん中の人</span>
+      <span><i style="background:var(--good);opacity:.35;height:10px"></i>9割の人がこの範囲</span>
+      <span><i style="background:var(--bad)"></i>破産ライン・破産した人</span>
+    </div>
+  </section>
+
+  <section>
+    <details id="more">
+      <summary>くわしい指標を見る</summary>
+      <div class="det">
+        <dl>
+          <dt>リスクリワード<small>平均利益 ÷ 平均損失</small></dt><dd id="dRR">–</dd>
+          <dt>期待値（R）<small>損失1回分を1とした平均損益</small></dt><dd id="dEv">–</dd>
+          <dt>損益分岐の勝率<small>これを超えれば期待値プラス</small></dt><dd id="dBe">–</dd>
+          <dt>1回のリスク<small>元手に対する損失の割合</small></dt><dd id="dF">–</dd>
+          <dt>ケリー基準<small>1回のリスクの理論上の上限</small></dt><dd id="dK">–</dd>
+          <dt>運を上回るまでの回数<small>95%の確度で合計がプラスになる目安</small></dt><dd id="dN">–</dd>
+        </dl>
+        <h2>期待値マップ</h2>
+        <p class="lead">緑は続けるほど増える組み合わせ、赤は減る組み合わせ。点が今の設定です。</p>
+        <div class="canvas-box"><canvas id="map" height="290" role="img" aria-label="勝率とリスクリワードの期待値マップ"></canvas></div>
+      </div>
+    </details>
+  </section>
+
+  <div class="notes">
+    <p><strong>ご注意：</strong>このツールは考え方を学ぶためのもので、投資助言や将来の成績を保証するものではありません。結果は入力した数字にもとづくシミュレーションの目安です。実際の売買は自己責任で判断してください。</p>
+    <p>プライバシー：入力した数字はお使いの端末の中だけで計算され、どこにも送信・保存されません。</p>
+    <p>計算の前提：毎回、そのときの資金に対して同じ割合を賭けます（資金が増えれば賭け金も増える）。手数料やスリッページは含みません。2,000人分をシミュレーションして100人あたりに直しています。</p>
+    <p>勝率・平均利益・平均損失は、実際の取引記録から出した数字ほど結果が正確になります。</p>
+  </div>
+</main>
+
+<div class="bar" id="bar" aria-hidden="true">
+  <a href="#hero" tabindex="-1"><span class="t" id="bT"></span><span class="s" id="bS"></span></a>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const F = {
+    cap:{min:10000, max:1e11, def:1000000, yen:true},
+    p:{min:1, max:99, def:40, step:1},
+    win:{min:1, max:1e11, def:40000, yen:true},
+    loss:{min:1, max:1e11, def:20000, yen:true},
+    n:{min:10, max:2000, def:200, step:10},
+    dd:{min:10, max:90, def:50, step:5}
+  };
+  const PRESETS = [
+    {name:'損小利大', sub:'勝率35%・利益は損失の3倍', p:35, rr:3, f:0.02},
+    {name:'コツコツドカン', sub:'勝率85%・たまに大損', p:85, rr:0.15, f:0.02},
+    {name:'一発勝負', sub:'1回に元手の25%を賭ける', p:50, rr:1.5, f:0.25},
+    {name:'五分五分', sub:'勝率50%・利益＝損失', p:50, rr:1, f:0.02}
+  ];
+  const S = {};
+  Object.keys(F).forEach(k => S[k] = F[k].def);
+
+  // formatting
+  function yen(v, unit=true){
+    const s = v < 0 ? '−' : ''; v = Math.abs(v);
+    let out;
+    if (!isFinite(v) || v >= 1e16) out = '1京以上';
+    else if (v >= 1e12) out = (+(v/1e12).toPrecision(3)) + '兆';
+    else if (v >= 1e8) out = (+(v/1e8).toPrecision(3)) + '億';
+    else if (v >= 1e4) out = (v >= 1e6 ? Math.round(v/1e4).toLocaleString('ja-JP') : +(v/1e4).toFixed(1)) + '万';
+    else out = Math.round(v).toLocaleString('ja-JP');
+    return s + out + (unit ? '円' : '');
+  }
+  const pct = (x, d=1) => (+(x*100).toFixed(d)) + '%';
+  const toHalf = s => String(s).replace(/[０-９．，]/g, c => String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  const parse = s => { const v = parseFloat(toHalf(s).replace(/[^\d.]/g,'')); return isNaN(v) ? null : v; };
+  const clamp = (k, v) => Math.min(F[k].max, Math.max(F[k].min, v));
+  function niceStep(v){ const e = Math.pow(10, Math.floor(Math.log10(Math.max(v,1)))); return Math.max(1, e/5); }
+
+  function show(k){
+    $(k).value = F[k].yen ? Math.round(S[k]).toLocaleString('ja-JP') : S[k];
+    const r = $(k+'R'); if (r) r.value = S[k];
+  }
+  function setVal(k, v, fromPreset){
+    v = clamp(k, v);
+    if (!F[k].yen) v = Math.round(v / F[k].step) * F[k].step;
+    S[k] = clamp(k, v); show(k);
+    if (!fromPreset) markPreset(-1);
+    schedule();
+  }
+
+  Object.keys(F).forEach(k => {
+    const el = $(k);
+    el.addEventListener('input', () => {
+      const v = parse(el.value);
+      if (v !== null && v >= F[k].min && v <= F[k].max){ S[k] = v; const r = $(k+'R'); if (r) r.value = v; markPreset(-1); schedule(); }
+    });
+    el.addEventListener('change', () => { const v = parse(el.value); setVal(k, v === null ? S[k] : v); });
+    el.addEventListener('focus', () => { if (F[k].yen) el.value = Math.round(S[k]); el.select(); });
+    el.addEventListener('blur', () => show(k));
+    const r = $(k+'R');
+    if (r) r.addEventListener('input', () => setVal(k, +r.value));
+  });
+  document.querySelectorAll('.stepper button').forEach(b => {
+    b.addEventListener('click', () => {
+      const k = b.dataset.k, d = +b.dataset.d, cur = S[k];
+      if (F[k].yen){
+        const st = niceStep(d > 0 ? cur : cur - 1);
+        setVal(k, d > 0 ? Math.floor(cur/st)*st + st : Math.ceil(cur/st)*st - st);
+      } else setVal(k, cur + d * F[k].step);
+    });
+  });
+
+  const presetBox = $('presets');
+  PRESETS.forEach((pr, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `${pr.name}<small>${pr.sub}</small>`;
+    b.addEventListener('click', () => {
+      const cap = S.cap, loss = Math.round(cap * pr.f);
+      S.p = pr.p; S.loss = loss; S.win = Math.round(loss * pr.rr);
+      ['p','loss','win'].forEach(show);
+      markPreset(i); schedule();
+    });
+    presetBox.appendChild(b);
+  });
+  function markPreset(i){ [...presetBox.children].forEach((b, j) => b.setAttribute('aria-pressed', j === i ? 'true' : 'false')); }
+
+  $('reset').addEventListener('click', () => { Object.keys(F).forEach(k => { S[k] = F[k].def; show(k); }); markPreset(-1); schedule(); });
+
+  let timer;
+  function schedule(){ clearTimeout(timer); timer = setTimeout(run, 50); }
+
+  // simulation
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  const SIMS = 2000, SHOW = 24;
+  function simulate(p, R, N, f, dd, light){
+    const floor = 1 - dd, K = Math.min(N, 150);
+    const ticks = new Int32Array(K+1);
+    for (let k=0;k<=K;k++) ticks[k] = Math.round(k*N/K);
+    const cp = light ? null : new Float64Array(SIMS*(K+1));
+    const paths = [], rnd = mulberry32(20261021);
+    const up = 1 + f*R, dn = 1 - f;
+    let ruined = 0, profit = 0;
+    for (let s=0;s<SIMS;s++){
+      let c = 1, dead = false, k = 1, deadAt = -1;
+      if (cp) cp[s*(K+1)] = 1;
+      const path = (!light && s < SHOW) ? new Float64Array(N+1) : null;
+      if (path) path[0] = 1;
+      for (let t=1;t<=N;t++){
+        if (!dead){
+          c *= (rnd() < p) ? up : dn;
+          if (c > 1e300) c = 1e300;
+          if (c <= floor + 1e-12){ dead = true; deadAt = t; if (light) break; }
+        }
+        if (path) path[t] = c;
+        if (cp) while (k<=K && ticks[k]===t){ cp[s*(K+1)+k] = c; k++; }
+      }
+      if (dead) ruined++; else if (c > 1) profit++;
+      if (path) paths.push({path, dead, deadAt});
+    }
+    if (light) return {ruin: ruined/SIMS};
+    const p5 = new Float64Array(K+1), p50 = new Float64Array(K+1), p95 = new Float64Array(K+1), col = new Float64Array(SIMS);
+    for (let k=0;k<=K;k++){
+      for (let s=0;s<SIMS;s++) col[s] = cp[s*(K+1)+k];
+      col.sort();
+      p5[k] = col[Math.floor(SIMS*0.05)]; p50[k] = col[Math.floor(SIMS*0.5)]; p95[k] = col[Math.min(SIMS-1, Math.floor(SIMS*0.95))];
+    }
+    return {ruin: ruined/SIMS, ruinCount: ruined, profit: profit/SIMS, ticks, p5, p50, p95, paths, floor, N, K};
+  }
+  function to100(fr){
+    const raw = fr.map(x => x*100), base = raw.map(Math.floor);
+    let rem = 100 - base.reduce((a,b)=>a+b,0);
+    raw.map((x,i)=>[x-base[i], i]).sort((a,b)=>b[0]-a[0]).forEach(([_,i]) => { if (rem > 0){ base[i]++; rem--; } });
+    return base;
+  }
+
+  let last = null;
+  function run(){
+    const cap = S.cap, p = S.p/100, N = S.n, dd = S.dd/100;
+    const lossOver = S.loss > cap;
+    const loss = Math.min(S.loss, cap), win = S.win;
+    const R = win / loss, f = loss / cap;
+    const ev = p*R - (1-p), evYen = ev * loss;
+    const be = 1/(1+R), kelly = p - (1-p)/R;
+    const sd = Math.sqrt(p*(1-p))*(R+1);
+    const sim = simulate(p, R, N, f, dd);
+    last = {p, R, N, f, dd, cap, sim};
+
+    // derived hints
+    $('pD').textContent = `10回中およそ${+(p*10).toFixed(1)}回勝つ`;
+    $('winD').textContent = `損失の${+R.toFixed(2)}倍（リスクリワード ${+R.toFixed(2)}）`;
+    const lossD = $('lossD');
+    lossD.textContent = lossOver ? '元手より大きいので、元手と同じ額として計算しています' : `1回で元手の${pct(f, 2)}を失う`;
+    lossD.className = 'derived' + (lossOver || f > 0.1 ? ' alert' : '');
+    $('ddD').textContent = `資金が${yen(cap*(1-dd))}を切ったら破産`;
+
+    // 100 people
+    const fr = [sim.profit, Math.max(0, 1 - sim.profit - sim.ruin), sim.ruin];
+    let [g, l, b] = to100(fr);
+    if (sim.ruinCount > 0 && b === 0){ b = 1; if (l > 0) l--; else g--; }
+    $('cG').textContent = g; $('cL').textContent = l; $('cB').textContent = b;
+    const dots = $('dots'); let html = '';
+    for (let i=0;i<100;i++) html += `<i class="${i<g?'g':i<g+l?'l':'b'}"></i>`;
+    dots.innerHTML = html;
+    dots.setAttribute('aria-label', `100人中、利益で終わる人${g}人、損で終わる人${l}人、破産する人${b}人`);
+
+    // verdict
+    let level, title, text, color;
+    if (ev <= 0.0001){
+      level = 0; color = 'var(--bad)'; title = 'ギャンブルです';
+      text = ev < -0.0001
+        ? `平均すると1回あたり${yen(-evYen)}ずつ負けていく計算です。続けるほど資金は減っていきます。`
+        : `平均すると損も得もしない、運だけの勝負です。手数料のぶん、実際にはじわじわ減ります。`;
+    } else if (sim.ruin >= 0.05 || (kelly > 0 && f > 2*kelly)){
+      level = 1; color = 'var(--warn)'; title = '勝てるやり方なのに、賭け方がギャンブル';
+      text = `平均では1回${yen(evYen)}のプラス。でも1回の損失が元手の${pct(f)}と大きすぎて、100人中${b}人が途中で破産します。`;
+    } else if (sim.profit < 0.8){
+      level = 2; color = 'var(--warn)'; title = 'まだ運しだいです';
+      text = `平均では1回${yen(evYen)}のプラス。ただ${N}回では結果がぶれやすく、100人中${l+b}人は損で終わります。`;
+    } else {
+      level = 3; color = 'var(--good)'; title = 'ギャンブルではありません';
+      text = `平均で1回${yen(evYen)}のプラス。${N}回続けると100人中${g}人が利益で終わり、破産は${b === 0 ? 'ほぼいません' : b + '人です'}。`;
+    }
+    $('vTitle').textContent = title; $('vText').textContent = text;
+    document.documentElement.style.setProperty('--v', color);
+    $('bT').textContent = title; $('bS').textContent = `破産 ${b}人／100人`;
+
+    // results
+    const K = sim.K;
+    const rEv = $('rEv'); rEv.textContent = (evYen > 0 ? '+' : '') + yen(evYen); rEv.className = 'v ' + (ev > 0.0001 ? 'good' : 'bad');
+    const setR = (id, m) => { const el = $(id); el.textContent = yen(m*cap); el.className = 'v ' + (m > 1.0001 ? 'good' : m < 0.9999 ? 'bad' : ''); };
+    setR('rMid', sim.p50[K]); setR('rHi', sim.p95[K]); setR('rLo', sim.p5[K]);
+
+    // advice
+    const adv = [];
+    if (ev <= 0.0001){
+      adv.push(`勝率を<b>${pct(be)}より上</b>にする。今は${pct(Math.max(0, be-p))}足りません。`);
+      adv.push(`または、勝ったときの平均利益を<b>${yen(Math.ceil(loss*(1-p)/p))}より多く</b>する（損失はそのまま）。`);
+      adv.push('この2つのどちらかを変えないかぎり、賭け金や回数をいじっても勝てるようにはなりません。');
+    } else {
+      if (sim.ruin >= 0.05 || (kelly > 0 && f > 2*kelly)){
+        const f2 = Math.max(0.001, Math.min(f*0.999, kelly/2));
+        const r2 = simulate(p, R, N, f2, dd, true).ruin;
+        const b2 = Math.round(r2*100);
+        adv.push(`1回の損失を<b>${yen(cap*f2)}</b>（元手の${pct(f2)}）くらいまで下げると、破産は100人中${b2 === 0 && r2 > 0 ? '1人未満' : b2 + '人'}になります。`);
+        adv.push(`利益も同じ割合で小さくなりますが、リスクリワード（${+R.toFixed(2)}倍）は変わらないので強みはそのまま残ります。`);
+      }
+      const need = Math.ceil(Math.pow(1.645*sd/ev, 2));
+      if (N < need) adv.push(`結果が運より実力で決まるには、<b>約${need.toLocaleString('ja-JP')}回</b>の試行が目安です。今の${N}回では、負け越しても手法が悪いとは限りません。`);
+      else adv.push(`${N}回は、結果が運より実力で決まる目安（約${need.toLocaleString('ja-JP')}回）を超えています。`);
+      if (!(sim.ruin >= 0.05 || (kelly > 0 && f > 2*kelly))) adv.push('この勝率と平均利益・損失が、実際の記録で再現できているかを確かめるのがいちばん大事です。');
+    }
+    const advEl = $('advice'); advEl.innerHTML = adv.map(a => `<li>${a}</li>`).join('');
+
+    // details
+    $('dRR').textContent = +R.toFixed(2) + '倍';
+    const dEv = $('dEv'); dEv.textContent = (ev > 0 ? '+' : '') + ev.toFixed(2) + 'R'; dEv.className = ev > 0.0001 ? 'good' : 'bad';
+    $('dBe').textContent = pct(be);
+    $('dF').textContent = pct(f, 2);
+    $('dK').textContent = kelly > 0 ? pct(kelly) + (f > kelly ? '（超えています）' : '') : '0%（賭けない）';
+    $('dN').textContent = ev > 0.0001 ? '約' + Math.ceil(Math.pow(1.645*sd/ev, 2)).toLocaleString('ja-JP') + '回' : '到達しない';
+
+    $('chart').setAttribute('aria-label', `${N}回後、真ん中の人の資金は${yen(sim.p50[K]*cap)}、下位5%は${yen(sim.p5[K]*cap)}、上位5%は${yen(sim.p95[K]*cap)}`);
+    drawChart();
+    if ($('more').open) drawMap();
+  }
+
+  // drawing
+  function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function setup(cv){
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = +cv.getAttribute('height');
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); cv.style.height = h + 'px';
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {ctx, w, h};
+  }
+  function drawChart(){
+    if (!last) return;
+    const {sim, cap} = last, cv = $('chart'); if (!cv.clientWidth) return;
+    const {ctx, w, h} = setup(cv);
+    const ink = css('--ink'), muted = css('--muted'), line = css('--line'), good = css('--good'), bad = css('--bad');
+    ctx.clearRect(0,0,w,h);
+    const L = 58, Rm = 10, T = 12, B = 28, pw = w-L-Rm, ph = h-T-B;
+    let lo = Math.max(1e-3, Math.min(sim.floor, ...sim.p5) * 0.85), hi = Math.min(1e300, Math.max(1.25, ...sim.p95) * 1.15);
+    const lLo = Math.log10(lo), lHi = Math.log10(hi);
+    const X = t => L + pw*t/sim.N;
+    const Y = v => T + ph*(1 - (Math.log10(Math.min(Math.max(v,lo),hi)) - lLo)/(lHi - lLo));
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily; ctx.fillStyle = muted; ctx.strokeStyle = line; ctx.lineWidth = 1;
+    let ticks = [];
+    if (lHi - lLo > 2.2){
+      const step = Math.ceil((lHi - lLo)/5);
+      for (let e = Math.ceil(lLo); e <= lHi; e += step) ticks.push(Math.pow(10, e));
+    } else {
+      const nice = [0.01,0.02,0.05,0.1,0.2,0.3,0.5,0.7,1,1.5,2,3,5,7,10,15,20,30,50,70,100];
+      ticks = nice.filter(v => v >= lo && v <= hi);
+      while (ticks.length > 6) ticks = ticks.filter((v,i) => i%2 === 0 || v === 1);
+    }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ticks.forEach(v => { const y = Y(v); ctx.beginPath(); ctx.moveTo(L,y); ctx.lineTo(w-Rm,y); ctx.stroke(); ctx.fillText(yen(v*cap, false), L-6, y); });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [0,0.5,1].forEach(fr => { const t = Math.round(sim.N*fr); ctx.textAlign = fr === 0 ? 'left' : fr === 1 ? 'right' : 'center'; ctx.fillText(fr === 0 ? 'スタート' : t + '回', X(t), h-B+8); });
+
+    ctx.beginPath();
+    for (let k=0;k<=sim.K;k++){ const x = X(sim.ticks[k]), y = Y(sim.p95[k]); k ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }
+    for (let k=sim.K;k>=0;k--) ctx.lineTo(X(sim.ticks[k]), Y(sim.p5[k]));
+    ctx.closePath(); ctx.globalAlpha = 0.16; ctx.fillStyle = good; ctx.fill(); ctx.globalAlpha = 1;
+
+    const stride = Math.max(1, Math.floor(sim.N/400));
+    sim.paths.forEach(({path, dead, deadAt}) => {
+      const end = dead ? deadAt : sim.N;
+      ctx.beginPath();
+      for (let t=0;t<=end;t+=stride){ const x = X(t), y = Y(path[t]); t ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }
+      ctx.lineTo(X(end), Y(path[end]));
+      ctx.strokeStyle = dead ? bad : good; ctx.globalAlpha = dead ? 0.7 : 0.28; ctx.lineWidth = 1; ctx.stroke();
+      if (dead){ ctx.globalAlpha = 0.9; ctx.fillStyle = bad; ctx.beginPath(); ctx.arc(X(end), Y(path[end]), 2.4, 0, 7); ctx.fill(); }
+    });
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([5,4]); ctx.strokeStyle = bad; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(L, Y(sim.floor)); ctx.lineTo(w-Rm, Y(sim.floor)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = bad; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('破産ライン', w-Rm-2, Y(sim.floor)-3);
+    ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, Y(1)); ctx.lineTo(w-Rm, Y(1)); ctx.stroke();
+    ctx.fillStyle = muted; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText('元手', L+4, Y(1)-3);
+    ctx.beginPath();
+    for (let k=0;k<=sim.K;k++){ const x = X(sim.ticks[k]), y = Y(sim.p50[k]); k ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }
+    ctx.strokeStyle = ink; ctx.lineWidth = 2.6; ctx.stroke();
+  }
+  function drawMap(){
+    if (!last) return;
+    const cv = $('map'); if (!cv.clientWidth) return;
+    const {ctx, w, h} = setup(cv);
+    const ink = css('--ink'), muted = css('--muted'), good = css('--good'), bad = css('--bad'), surface = css('--surface');
+    ctx.clearRect(0,0,w,h);
+    const L = 44, Rm = 10, T = 10, B = 32, pw = w-L-Rm, ph = h-T-B;
+    const pMin = 0.05, pMax = 0.95, rMin = 0.2, rMax = 8, lrMin = Math.log(rMin), lrMax = Math.log(rMax);
+    const X = p => L + pw*(p-pMin)/(pMax-pMin);
+    const Y = r => T + ph*(1 - (Math.log(r)-lrMin)/(lrMax-lrMin));
+    const cell = 5;
+    for (let x=0;x<pw;x+=cell){
+      const p = pMin + (pMax-pMin)*(x+cell/2)/pw;
+      for (let y=0;y<ph;y+=cell){
+        const r = Math.exp(lrMax - (lrMax-lrMin)*(y+cell/2)/ph), ev = p*r - (1-p);
+        ctx.fillStyle = ev > 0 ? good : bad;
+        ctx.globalAlpha = Math.min(1, Math.abs(ev)/(ev > 0 ? 2 : 0.8))*0.75 + 0.05;
+        ctx.fillRect(L+x, T+y, cell, cell);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); let st = false;
+    for (let i=0;i<=200;i++){ const p = pMin+(pMax-pMin)*i/200, r = (1-p)/p; if (r < rMin || r > rMax){ st = false; continue; } st ? ctx.lineTo(X(p),Y(r)) : ctx.moveTo(X(p),Y(r)); st = true; }
+    ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily; ctx.fillStyle = muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [10,30,50,70,90].forEach(v => ctx.fillText(v+'%', X(v/100), h-B+6));
+    ctx.fillText('勝率', L+pw/2, h-14);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    [0.25,0.5,1,2,4,8].forEach(v => ctx.fillText(v+'倍', L-5, Y(v)));
+    const cp = Math.min(pMax, Math.max(pMin, last.p)), cr = Math.min(rMax, Math.max(rMin, last.R));
+    ctx.beginPath(); ctx.arc(X(cp), Y(cr), 7, 0, 7); ctx.fillStyle = surface; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = ink; ctx.stroke();
+  }
+
+  $('more').addEventListener('toggle', () => { if ($('more').open) drawMap(); });
+  const redraw = () => { drawChart(); if ($('more').open) drawMap(); };
+  let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(redraw, 80); });
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw); } catch(e){}
+  new MutationObserver(redraw).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+
+  // sticky summary when verdict is off screen
+  const bar = $('bar');
+  if ('IntersectionObserver' in window){
+    new IntersectionObserver(([e]) => bar.classList.toggle('show', !e.isIntersecting), {threshold:0}).observe($('dots'));
+  }
+  bar.querySelector('a').addEventListener('click', e => { e.preventDefault(); $('hero').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); });
+
+  Object.keys(F).forEach(show);
+  run();
+})();
+</script>
+</body>
+</html>
